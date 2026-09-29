@@ -1,6 +1,14 @@
+# Vim
 *.swp
 *.swo
 
 # Python
 __pycache__/
 *.py[cod]
+
+# backend build / dist
+dist/
+build/
+.venv
+
+
