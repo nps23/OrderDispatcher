@@ -7,9 +7,9 @@ dependencies = [
     "uvicorn[standard]",
     "sqlalchemy",
     "psycopg[binary]",
-    "alembic",
     "python-multipart",
     "pydantic",
+    "sqlmodel>=0.0.47",
 ]
 
 [tool.uv]
