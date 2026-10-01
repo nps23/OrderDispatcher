@@ -8,7 +8,6 @@ import sqlalchemy.orm
 
 from src.api import models
 from src.services import order_ingestion
-from src.services import polling_source
 from src.storage import database
 from src.storage import models as storage_models
 
@@ -73,18 +72,18 @@ class GraceRouterAPI:
             tags=["Orders"],
         )
         self.router.add_api_route(
+            path="/ingest/webhook",
+            endpoint=self.ingest_webhook,
+            methods=["POST"],
+            response_model=models.OrderReadResponse,
+            tags=["Ingestion"],
+        )
+        self.router.add_api_route(
             path="/ingest/csv",
             endpoint=self.ingest_csv,
             methods=["POST"],
             response_model=models.IngestionBatchResponse,
             tags=["Ingestion"],
-        )
-        self.router.add_api_route(
-            path="/polling",
-            endpoint=self.poll_orders,
-            methods=["GET"],
-            response_model=list[models.OrderReadResponse],
-            tags=["Orders"],
         )
 
     def status(self) -> models.BasicResponse:
@@ -147,18 +146,19 @@ class GraceRouterAPI:
     ) -> storage_models.Order:
         return order_ingestion.create_order(session, payload)
 
+    def ingest_webhook(
+        self,
+        payload: models.WebhookEvent,
+        session: sqlalchemy.orm.Session = fastapi.Depends(database.get_db),
+    ) -> storage_models.Order:
+        return order_ingestion.ingest_webhook_order(session, payload)
+
     def dispatch_order(
         self,
         order_id: UUID,
         session: sqlalchemy.orm.Session = fastapi.Depends(database.get_db),
     ) -> storage_models.DispatchedOrder:
         return order_ingestion.dispatch_order(session, order_id)
-
-    def poll_orders(
-        self,
-        session: sqlalchemy.orm.Session = fastapi.Depends(database.get_db),
-    ) -> list[storage_models.Order]:
-        return polling_source.poll_orders(session)
 
     async def ingest_csv(
         self,

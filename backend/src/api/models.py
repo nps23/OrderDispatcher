@@ -39,62 +39,56 @@ class PollingAPIResponse(sqlmodel.SQLModel):
 
 
 class CSVOrderPayload(sqlmodel.SQLModel):
-    first_name: str
-    last_name: str
     items: str
-    notes: str = ""
-    tomorrow: bool
-    meal: storage_models.Meal
+    scheduled_for: datetime | None = None
 
+    @pydantic.field_validator("scheduled_for", mode="before")
+    @classmethod
+    def empty_schedule_is_none(cls, value: object) -> object:
+        return None if value == "" else value
 
-class OrderItemCreateRequest(sqlmodel.SQLModel):
-    source_item_id: str | None = sqlmodel.Field(default=None, max_length=255)
-    name: str = sqlmodel.Field(min_length=1, max_length=255)
-    quantity: int = sqlmodel.Field(default=1, gt=0)
-    unit_price: Decimal | None = sqlmodel.Field(default=None, ge=0)
-    category: str | None = sqlmodel.Field(default=None, max_length=100)
-    special_instructions: str | None = sqlmodel.Field(default=None, max_length=1000)
+    @pydantic.field_validator("scheduled_for")
+    @classmethod
+    def schedule_must_include_timezone(
+        cls, value: datetime | None
+    ) -> datetime | None:
+        if value is not None and (
+            value.tzinfo is None or value.utcoffset() is None
+        ):
+            raise ValueError("scheduled_for must include a timezone")
+        return value
 
 
 class OrderCreateRequest(sqlmodel.SQLModel):
-    source_order_id: str | None = sqlmodel.Field(default=None, max_length=255)
-    order_source: str | None = sqlmodel.Field(default=None, max_length=100)
-    restaurant: str | None = sqlmodel.Field(default=None, max_length=255)
-    first_name: str | None = sqlmodel.Field(default=None, max_length=100)
-    last_name: str | None = sqlmodel.Field(default=None, max_length=100)
-    total: Decimal | None = sqlmodel.Field(default=None, ge=0)
-    order_type: storage_models.OrderType = storage_models.OrderType.REALTIME
+    source_order_id: str = sqlmodel.Field(min_length=1, max_length=255)
     scheduled_for: datetime | None = None
-    notes: str | None = None
-    items: list[OrderItemCreateRequest] = sqlmodel.Field(min_length=1)
+    items: list[str] = sqlmodel.Field(min_length=1)
 
+    @pydantic.field_validator("scheduled_for")
+    @classmethod
+    def schedule_must_include_timezone(
+        cls, value: datetime | None
+    ) -> datetime | None:
+        if value is not None and (
+            value.tzinfo is None or value.utcoffset() is None
+        ):
+            raise ValueError("scheduled_for must include a timezone")
+        return value
 
 class OrderItemReadResponse(sqlmodel.SQLModel):
     model_config = pydantic.ConfigDict(from_attributes=True)
 
     id: UUID
-    source_item_id: str | None
     name: str
-    quantity: int
-    unit_price: Decimal | None
-    category: str | None
-    special_instructions: str | None
 
 
 class OrderReadResponse(sqlmodel.SQLModel):
     model_config = pydantic.ConfigDict(from_attributes=True)
 
     id: UUID
-    source_order_id: str | None
-    order_source: str | None
-    restaurant: str | None
-    first_name: str | None
-    last_name: str | None
-    total: Decimal | None
-    order_type: storage_models.OrderType
+    source_order_id: str
     status: storage_models.OrderStatus
     scheduled_for: datetime | None
-    notes: str | None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemReadResponse]

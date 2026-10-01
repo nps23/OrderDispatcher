@@ -1,4 +1,4 @@
-- Add a compose.yaml that can build the backend and database into a single image. Once you have this, update the README. Note: this is not a recommended dev flow since we lose  FastAPI hot reloading, but useful for quick demo purposes. Make sure to note that in the README.
+- Add a compose.yaml that can build the backend and database into a single image. Once you have this, update the README. Note: this is not a recommended dev flow since we lose  FastAPI hot reloading, but useful for quick demo purposes. Make sure to note that in the README. Note that the instructions should call out building the database via docker compose, but running the app via uv for hot reload capabilities.
 - Update pyproject.toml with all of the exiting deps in this directory right now: ordering_system/order_dispatcher/backend
 - In my ingest_mocks directory, I want:
     1. A simple python CLI that accepts a CSV path and calls my POST /ingest/csv endpoint to simulate users uploading a CSV.
@@ -7,4 +7,6 @@
 - Supporting user-defined extenral API URLs in the polling simulator is overengineering. This is for testing purposes, don't overcomplicate.
 - Moving everything from ingest_mocks  to scripts to make it cleaner and adjacent to the pipeline simulator
 - Give me a short example on pagination with SQLAlchemy
-
+- Take a look at the polling implementation and dispatch worker I added on the background worker. Please update the README briefly to describe the functionality. It:
+    - "Polls" by checking the  api_responses.jsonl in /data every 30 seconds.
+    - Dispatches orders that are scheduled to the robot, using the UTC timestamps. 

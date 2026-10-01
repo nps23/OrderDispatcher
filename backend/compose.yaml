@@ -1,4 +1,16 @@
 services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://order_dispatcher:order_dispatcher@db:5432/order_dispatcher
+    ports:
+      - "9000:9000"
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:17-alpine
     environment:

@@ -6,10 +6,11 @@ COPY --from=uv /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
-COPY . .
+COPY backend/ ./
+COPY data/api_responses.jsonl /data/api_responses.jsonl
 
 EXPOSE 9000
 

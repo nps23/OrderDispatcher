@@ -27,5 +27,10 @@ def get_db() -> Generator[sqlalchemy.orm.Session, None, None]:
     with _local_session() as session:
         yield session
 
+
+def new_session() -> sqlalchemy.orm.Session:
+    return _local_session()
+
+
 def get_engine():
     return _engine

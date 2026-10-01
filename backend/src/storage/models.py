@@ -1,7 +1,6 @@
 import enum
 import uuid
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 
 import sqlalchemy
@@ -17,11 +16,6 @@ class IngestionSource(enum.StrEnum):
     CSV = "csv"
 
 
-class OrderType(enum.StrEnum):
-    REALTIME = "realtime"
-    SCHEDULED = "scheduled"
-
-
 class OrderStatus(enum.StrEnum):
     RECEIVED = "received"
     SCHEDULED = "scheduled"
@@ -31,12 +25,6 @@ class OrderStatus(enum.StrEnum):
 
 class DispatchStatus(enum.StrEnum):
     DISPATCHED = "dispatched"
-
-
-class Meal(enum.StrEnum):
-    BREAKFAST = "breakfast"
-    LUNCH = "lunch"
-    DINNER = "dinner"
 
 
 def _enum_values(enum_class: type[enum.StrEnum]) -> list[str]:
@@ -71,26 +59,8 @@ class Order(sqlmodel.SQLModel, table=True):
             sqlalchemy.types.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
         )
     )
-    source_order_id: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(255), nullable=True)
-    )
-    order_source: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(100), nullable=True)
-    )
-    restaurant: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(255), nullable=True)
-    )
-    first_name: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(100), nullable=True)
-    )
-    last_name: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(100), nullable=True)
-    )
-    total: Decimal | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.Numeric(10, 2), nullable=True)
-    )
-    order_type: OrderType = sqlmodel.Field(
-        sa_column=_enum_column(OrderType, "order_type", nullable=False)
+    source_order_id: str = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(sqlalchemy.String(255), nullable=False)
     )
     status: OrderStatus = sqlmodel.Field(
         sa_column=_enum_column(
@@ -99,9 +69,6 @@ class Order(sqlmodel.SQLModel, table=True):
     )
     scheduled_for: datetime | None = sqlmodel.Field(
         default=None, sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=True), nullable=True)
-    )
-    notes: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.Text, nullable=True)
     )
     created_at: datetime = sqlmodel.Field(
         sa_column=sqlalchemy.Column(
@@ -165,21 +132,11 @@ class DispatchedOrder(sqlmodel.SQLModel, table=True):
     order: "Order" = sqlmodel.Relationship(back_populates="dispatch")
 class OrderItem(sqlmodel.SQLModel, table=True):
     __tablename__ = "order_items"
-    __table_args__ = (
-        sqlalchemy.CheckConstraint("quantity > 0", name="ck_order_items_quantity_positive"),
-        sqlalchemy.CheckConstraint(
-            "unit_price IS NULL OR unit_price >= 0", name="ck_order_items_price_nonnegative"
-        ),
-    )
 
     id: uuid.UUID = sqlmodel.Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.types.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
         )
-    )
-    source_item_id: str | None = sqlmodel.Field(
-        default=None,
-        sa_column=sqlalchemy.Column(sqlalchemy.String(255), nullable=True, index=True),
     )
     order_id: uuid.UUID = sqlmodel.Field(
         sa_column=sqlalchemy.Column(
@@ -189,19 +146,6 @@ class OrderItem(sqlmodel.SQLModel, table=True):
         )
     )
     name: str = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.String(255), nullable=False))
-    quantity: int = sqlmodel.Field(
-        default=1,
-        sa_column=sqlalchemy.Column(sqlalchemy.Integer, nullable=False, default=1),
-    )
-    category: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(100), nullable=True)
-    )
-    unit_price: Decimal | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.Numeric(10, 2), nullable=True)
-    )
-    special_instructions: str | None = sqlmodel.Field(
-        default=None, sa_column=sqlalchemy.Column(sqlalchemy.String(1000), nullable=True)
-    )
 
     order: "Order" = sqlmodel.Relationship(back_populates="items")
 

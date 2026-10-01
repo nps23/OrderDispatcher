@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -5,6 +6,7 @@ import fastapi
 import fastapi.middleware.cors
 
 from src.api import graceroute_api
+from src.services import background_worker
 from src.storage import database
 
 
@@ -14,7 +16,18 @@ def build_app():
     async def lifespan(app: fastapi.FastAPI) -> AsyncGenerator[None, None]:
         # TODO: decouple for a prod deployment, fine for prototype
         database.create_db_and_tables()
-        yield
+        worker = asyncio.create_task(
+            background_worker.run_background_worker(),
+            name="order-background-worker",
+        )
+        try:
+            yield
+        finally:
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
 
     app = fastapi.FastAPI(
         lifespan=lifespan,

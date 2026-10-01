@@ -3,14 +3,17 @@
 A prototype for a basic order ingest and dispatch system.
 
 All three inputs are normalized into the `Order` model. CSV rows with
-`tomorrow=true` are scheduled for the following day at 09:00 (breakfast),
-12:00 (lunch), or 18:00 (dinner), using UTC. `OrderEvent` is the append-only
-order history exposed by `GET /orders/{order_id}/events`.
+an ISO 8601 `scheduled_for` timestamp are dispatched automatically once that
+time is reached. The timestamp must include its UTC offset, for example
+`2030-10-01T09:00:00-04:00`. `OrderEvent` is the append-only order history
+exposed by `GET /orders/{order_id}/events`.
 
-Robot dispatch is intentionally a small synchronous handoff for this
-prototype: `POST /orders/{order_id}/dispatch` creates one record in
-`dispatched_orders`, changes the order status to `dispatched`, and records an
-audit event. It does not run a backend worker or contact a robot.
+Robot dispatch is intentionally a small handoff for this prototype:
+`POST /orders/{order_id}/dispatch` dispatches an eligible order immediately.
+Scheduled orders cannot be dispatched before their timestamp. A backend
+worker also checks for due scheduled orders every 30 seconds, creates one
+record in `dispatched_orders`, changes each order status to `dispatched`, and
+records an audit event.
 
 ## Backend
 
@@ -36,8 +39,31 @@ DATABASE_URL='postgresql+psycopg://order_dispatcher:order_dispatcher@localhost:5
   uv run uvicorn src.api.main:build_app --factory --reload --host 0.0.0.0 --port 9000
 ```
 
+`create_all` does not migrate or remove columns in an existing database. If
+you are using a disposable development database with the old schema, back up
+anything you need, then recreate the database volume before starting the new
+backend:
+
+```bash
+docker compose -f backend/compose.yaml down --volumes
+docker compose -f backend/compose.yaml up -d --wait db
+```
+
 The API is at `http://localhost:9000/docs`; the database health check is at
 `http://localhost:9000/health/database`.
+
+The backend polls `data/api_responses.jsonl` immediately at startup and then
+every 30 seconds. It also dispatches scheduled orders when their
+`scheduled_for` timestamp arrives. CSV timestamps must use ISO 8601 with an
+explicit timezone, for example `2030-10-01T09:00:00-04:00`.
+
+To run the backend and database in Docker, from the repository root use:
+
+```bash
+docker compose -f backend/compose.yaml up --build --wait
+```
+
+The API is then available at `http://localhost:9000/docs`.
 
 ### Test the CSV ingest endpoints
 
@@ -57,13 +83,14 @@ uv run python -m scripts.pipeline_cli simulate-bursts \
   --sleep-seconds 2
 ```
 
-The simulator posts each burst to `POST /orders`, sleeps between bursts, and
-continues until interrupted. Set `--sample` to use another webhook JSONL
-fixture. The CLI targets the local backend at `http://localhost:9000`.
+The simulator posts each burst to `POST /ingest/webhook`, sleeps between
+bursts, and continues until interrupted. Set `--sample` to use another webhook
+JSONL fixture. The CLI targets the local backend at `http://localhost:9000`.
 
-### Simulating API polling
-There is a `/polling` endpoint that, for now, just returns data from a json fixture.
-The implementation of this endpoint could be updated in the future to poll from a real external service.
+### Background polling
+The backend reads `data/api_responses.jsonl` at startup and polls the fixture
+again every 30 seconds. Set `POLLING_API_FILE` to use another JSONL fixture.
+There is no public polling endpoint.
 
 
 Once the backend is running, API documentation can be found at the `/docs` endpoint.
