@@ -11,4 +11,9 @@ dist/
 build/
 .venv
 
+# local config / databases
+.env
+.env.*
+!.env.example
+*.db
 

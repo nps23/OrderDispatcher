@@ -1,10 +1,10 @@
 import asyncio
 import uvicorn
 
-from src.api.main import build_app
+from src.api import main as api_main
 
 def main():
-    fast_api = build_app()
+    fast_api = api_main.build_app()
 
     server = uvicorn.Server(uvicorn.Config(
         fast_api,
