@@ -9,6 +9,10 @@ def webhook_bursts(
     sample_path: Path,
     burst_size: int = 25,
 ) -> Iterator[list[models.WebhookEvent]]:
+    """
+    Simulates bursty webhook traffic. 
+    
+    """
     if burst_size <= 0:
         raise ValueError("burst_size must be positive")
 
