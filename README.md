@@ -17,33 +17,53 @@ A background worker checks for due scheduled orders every 30 seconds and records
 
 ## Prerequisites
 
-For local development, install Docker with [Docker Compose v2](https://docs.docker.com/compose/install/), [uv](https://docs.astral.sh/uv/getting-started/installation/), and [Node.js with npm](https://nodejs.org/en/download/). Docker Desktop includes Compose. If you install Docker Engine directly on Linux, follow the [Compose plugin installation instructions](https://docs.docker.com/compose/install/linux/).
+For local development, install [Docker Engine](https://docs.docker.com/engine/install/), [uv](https://docs.astral.sh/uv/getting-started/installation/), and [Node.js with npm](https://nodejs.org/en/download/). Docker Compose is not required.
 
 ## Database
 
-PostgreSQL runs in Docker using `backend/compose.yaml`. From the repository root, start the database and wait for its health check:
+PostgreSQL runs from the official `postgres:17-alpine` Docker image. Create a Docker network so the database and optional backend container can communicate:
 
 ```bash
-docker compose -f backend/compose.yaml up -d --wait db
+docker network create order-dispatcher-network
 ```
 
-Compose creates the local `order_dispatcher` database and user and stores data in a named Docker volume. The API creates missing tables from the SQLModel definitions when it starts. The database health check is available at `http://localhost:9000/health/database` once the API is running.
-
-Stop the database while keeping its data with:
+Then start the database from the repository root:
 
 ```bash
-docker compose -f backend/compose.yaml down
+docker run -d \
+  --name order-dispatcher-db \
+  --network order-dispatcher-network \
+  --network-alias db \
+  --health-cmd="pg_isready -U order_dispatcher -d order_dispatcher" \
+  --health-interval=3s \
+  --health-timeout=3s \
+  --health-retries=10 \
+  -e POSTGRES_DB=order_dispatcher \
+  -e POSTGRES_USER=order_dispatcher \
+  -e POSTGRES_PASSWORD=order_dispatcher \
+  -p 5432:5432 \
+  -v order_dispatcher_data:/var/lib/postgresql/data \
+  postgres:17-alpine
 ```
 
-To completely reset the local database, remove its Docker volume and start it again:
+The database is reachable at `localhost:5432` from your computer and at `db:5432` from containers on the Docker network. Check that it is ready before starting the API:
 
 ```bash
-docker compose -f backend/compose.yaml down --volumes
-docker compose -f backend/compose.yaml up -d --wait db
+docker inspect --format='{{.State.Health.Status}}' order-dispatcher-db
 ```
 
-Removing the volume permanently deletes the local database contents.
-`create_all` creates missing tables but does not migrate or remove columns in an existing database.
+Wait for the command to report `healthy`. The API creates missing tables from the SQLModel definitions when it starts. Its database health check is available at `http://localhost:9000/health/database` once the API is running.
+
+Stop the database while keeping its data with `docker stop order-dispatcher-db`
+
+To completely reset the local database, remove the container and its volume, then repeat the `docker run` command above:
+
+```bash
+docker rm -f order-dispatcher-db
+docker volume rm order_dispatcher_data
+```
+
+Removing the volume permanently deletes the local database contents. The API's `create_all` creates missing tables but does not migrate or remove columns in an existing database.
 
 ## Backend
 
@@ -61,16 +81,22 @@ DATABASE_URL='postgresql+psycopg://order_dispatcher:order_dispatcher@localhost:5
 
 The API documentation is available at `http://localhost:9000/docs`.
 
-### Run the backend and database in Docker
+### Optionally run the backend in Docker
 
-From the repository root, build and start the backend and PostgreSQL together:
+You can run the API locally with hot reload as above while using the database container. Alternatively, build and run the backend image from the repository root:
 
 ```bash
-docker compose -f backend/compose.yaml up --build --wait
+docker build -f backend/Dockerfile -t order-dispatcher-backend .
+docker run --rm \
+  --name order-dispatcher-backend \
+  --network order-dispatcher-network \
+  -e DATABASE_URL='******db:5432/order_dispatcher' \
+  -p 9000:9000 \
+  order-dispatcher-backend
 ```
 
 The API documentation is available at `http://localhost:9000/docs`.
-Stop both containers with `docker compose -f backend/compose.yaml down`. This keeps the database volume; add `--volumes` only if you also want to permanently delete its contents.
+Stop the backend container with `Ctrl+C`. The database continues running until stopped separately.
 
 ### Background workers
 
@@ -81,9 +107,8 @@ The worker also dispatches scheduled orders when their scheduled time has arrive
 
 ### Upload a CSV
 
-The CSV uploader accepts the Homework survey columns and ignores additional columns.
-The required columns are `items`, `tomorrow`, and `meal`.
-Rows with `tomorrow=true` are scheduled 24 hours after upload; rows with `tomorrow=false` are received immediately.
+The required columns for CSV uploads are `items`, `tomorrow`, and `meal`.
+Rows with `tomorrow=true` are scheduled 24 hours after upload whereas rows with `tomorrow=false` are received immediately.
 With the backend running, execute the upload CLI from `backend/`:
 
 ```bash
