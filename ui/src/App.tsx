@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Activity, RefreshCw, Search } from 'lucide-react'
+import { Activity, RefreshCw, Search, Send } from 'lucide-react'
 import { DataGrid } from '@mui/x-data-grid'
 import type { GridColDef } from '@mui/x-data-grid'
+import {
+  Link as RouterLink,
+  Navigate,
+  Route,
+  Routes,
+} from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -10,6 +16,7 @@ import {
   CircularProgress,
   CssBaseline,
   InputAdornment,
+  Link,
   Paper,
   Stack,
   Tab,
@@ -19,22 +26,8 @@ import {
   Typography,
   createTheme,
 } from '@mui/material'
-
-type Status = 'received' | 'scheduled' | 'dispatched' | 'cancelled'
-
-type Order = {
-  id: string
-  source_order_id: string
-  status: Status
-  scheduled_for: string | null
-  created_at: string
-  items: {
-    id: string
-    name: string
-  }[]
-}
-
-const API_URL = 'http://localhost:9000'
+import OrderHistoryPage from './OrderHistoryPage'
+import { API_URL, formatDate, statusColors, type Order } from './orders'
 const PAGE_SIZE = 25
 
 const filters = [
@@ -50,13 +43,6 @@ const snapshot = [
   ['scheduled', 'Scheduled', '#6584b1'],
   ['dispatched', 'Dispatched', '#56815f'],
 ] as const
-
-const statusColors = {
-  received: 'warning',
-  scheduled: 'info',
-  dispatched: 'success',
-  cancelled: 'error',
-} as const
 
 const theme = createTheme({
   palette: {
@@ -102,9 +88,15 @@ const columns: GridColDef<Order>[] = [
     flex: 1,
     renderCell: ({ row }) => (
       <Box className="order-identifiers">
-        <Typography variant="subtitle2" title={row.source_order_id}>
+        <Link
+          component={RouterLink}
+          to={`/orders/${row.id}`}
+          underline="hover"
+          variant="subtitle2"
+          title={row.source_order_id}
+        >
           #{row.source_order_id}
-        </Typography>
+        </Link>
         <Typography variant="caption" color="text.secondary" title={row.id}>
           {row.id}
         </Typography>
@@ -164,7 +156,65 @@ const columns: GridColDef<Order>[] = [
   },
 ]
 
+function orderColumns(
+  onDispatched: () => void,
+  onError: (message: string) => void,
+): GridColDef<Order>[] {
+  return [
+    ...columns,
+    {
+      field: 'actions',
+      headerName: 'Action',
+      width: 130,
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: ({ row }) => (
+        <DispatchButton
+          order={row}
+          onDispatched={onDispatched}
+          onError={onError}
+        />
+      ),
+    },
+  ]
+}
+
 export default function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box className="app-shell">
+        <Box component="header" className="app-header">
+          <Typography
+            component={RouterLink}
+            to="/orders"
+            color="text.primary"
+            className="brand"
+          >
+            Order dispatch
+          </Typography>
+          <Button
+            size="small"
+            href={`${API_URL}/docs`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            API docs
+          </Button>
+        </Box>
+        <Routes>
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/:orderId" element={<OrderHistoryPage />} />
+          <Route path="*" element={<Navigate to="/orders" replace />} />
+        </Routes>
+      </Box>
+    </ThemeProvider>
+  )
+}
+
+function OrdersPage() {
   const [orders, setOrders] = useState<Order[] | null>(null)
   const [snapshotOrders, setSnapshotOrders] = useState<Order[] | null>(null)
   const [status, setStatus] = useState<string>('all')
@@ -173,6 +223,9 @@ export default function App() {
   const [refresh, setRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [gridColumns] = useState(() =>
+    orderColumns(() => setRefresh((value) => value + 1), setError),
+  )
 
   // paginated search for the grid
   useEffect(() => {
@@ -250,169 +303,195 @@ export default function App() {
   const update = () => setRefresh((value) => value + 1)
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box className="app-shell">
-        <Box component="header" className="app-header">
-          <Typography component="a" href="/orders" color="text.primary" className="brand">
-            Order dispatch
+    <Box component="main" className="app-main">
+      <Stack className="page-heading">
+        <Box>
+          <Typography component="h1" variant="h5">
+            Orders
           </Typography>
-          <Button
-            size="small"
-            href={`${API_URL}/docs`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            API docs
-          </Button>
+          <Typography color="text.secondary" variant="body2">
+            Browse and filter incoming ordres.
+          </Typography>
         </Box>
+        <Button
+          variant="outlined"
+          onClick={update}
+          disabled={loading}
+          startIcon={
+            loading ? <CircularProgress size={16} /> : <RefreshCw size={16} />
+          }
+        >
+          Refresh
+        </Button>
+      </Stack>
 
-        <Box component="main" className="app-main">
-          <Stack className="page-heading">
+      <Paper variant="outlined" className="queue-snapshot">
+        <Stack className="snapshot-row">
+          <Stack className="snapshot-label">
+            <Activity size={17} color="#83b58c" />
             <Box>
-              <Typography component="h1" variant="h5">
-                Orders
-              </Typography>
-              <Typography color="text.secondary" variant="body2">
-                Browse and filter incoming orders.
+              <Typography variant="subtitle2">Queue snapshot</Typography>
+              <Typography color="text.secondary" variant="caption">
+                All-orders page
               </Typography>
             </Box>
-            <Button
-              variant="outlined"
-              onClick={update}
-              disabled={loading}
-              startIcon={
-                loading ? <CircularProgress size={16} /> : <RefreshCw size={16} />
-              }
-            >
-              Refresh
-            </Button>
           </Stack>
-
-          <Paper variant="outlined" className="queue-snapshot">
-            <Stack className="snapshot-row">
-              <Stack className="snapshot-label">
-                <Activity size={17} color="#83b58c" />
-                <Box>
-                  <Typography variant="subtitle2">Queue snapshot</Typography>
-                  <Typography color="text.secondary" variant="caption">All-orders page</Typography>
-                </Box>
-              </Stack>
-              {snapshot.map(([key, label]) => (
-                <Stack key={key} className="snapshot-item">
-                  <Box className={`snapshot-dot snapshot-dot-${key}`} />
-                  <Typography color="text.secondary" variant="caption">
-                    {label}
-                  </Typography>
-                  <Typography variant="subtitle2" className="snapshot-count">
-                    {snapshotOrders === null ? '—' : counts[key]}
-                  </Typography>
-                </Stack>
-              ))}
-              <Typography
-                color="text.secondary"
-                variant="caption"
-                className="snapshot-update"
-              >
-                Updates every 30 sec
+          {snapshot.map(([key, label]) => (
+            <Stack key={key} className="snapshot-item">
+              <Box className={`snapshot-dot snapshot-dot-${key}`} />
+              <Typography color="text.secondary" variant="caption">
+                {label}
+              </Typography>
+              <Typography variant="subtitle2" className="snapshot-count">
+                {snapshotOrders === null ? '—' : counts[key]}
               </Typography>
             </Stack>
-          </Paper>
-
-          <Paper variant="outlined" className="orders-panel">
-            <Stack className="orders-toolbar">
-              <Tabs
-                value={status}
-                onChange={(_, value: string) => {
-                  setStatus(value)
-                  setOffset(0)
-                }}
-                variant="scrollable"
-                scrollButtons={false}
-                aria-label="Filter orders"
-              >
-                {filters.map(([value, label]) => (
-                  <Tab key={value} value={value} label={label} />
-                ))}
-              </Tabs>
-              <TextField
-                size="small"
-                placeholder="Search this page"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                slotProps={{
-                  htmlInput: { 'aria-label': 'Search orders on this page' },
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Search size={16} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                className="orders-search"
-              />
-            </Stack>
-
-            {error && (
-              <Alert
-                severity="error"
-                action={
-                  <Button color="inherit" onClick={update}>
-                    Retry
-                  </Button>
-                }
-                className="orders-error"
-              >
-                {error}
-              </Alert>
-            )}
-            <DataGrid<Order>
-              rows={rows}
-              columns={columns}
-              loading={loading && orders === null}
-              paginationMode="server"
-              paginationModel={{
-                page: offset / PAGE_SIZE,
-                pageSize: PAGE_SIZE,
-              }}
-              onPaginationModelChange={({ page }) =>
-                setOffset(page * PAGE_SIZE)
-              }
-              rowCount={-1}
-              paginationMeta={{
-                hasNextPage: (orders?.length ?? 0) > PAGE_SIZE,
-              }}
-              pageSizeOptions={[PAGE_SIZE]}
-              disableRowSelectionOnClick
-              localeText={{
-                noRowsLabel: query ? 'No matching orders' : 'No orders found',
-              }}
-              className="orders-grid"
-            />
-          </Paper>
+          ))}
           <Typography
-            variant="caption"
             color="text.secondary"
-            className="search-note"
+            variant="caption"
+            className="snapshot-update"
           >
-            Search is limited to the current page.
+            Updates every 30 sec
           </Typography>
-        </Box>
-      </Box>
-    </ThemeProvider>
+        </Stack>
+      </Paper>
+
+      <Paper variant="outlined" className="orders-panel">
+        <Stack className="orders-toolbar">
+          <Tabs
+            value={status}
+            onChange={(_, value: string) => {
+              setStatus(value)
+              setOffset(0)
+            }}
+            variant="scrollable"
+            scrollButtons={false}
+            aria-label="Filter orders"
+          >
+            {filters.map(([value, label]) => (
+              <Tab key={value} value={value} label={label} />
+            ))}
+          </Tabs>
+          <TextField
+            size="small"
+            placeholder="Search this page"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            slotProps={{
+              htmlInput: { 'aria-label': 'Search orders on this page' },
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            className="orders-search"
+          />
+        </Stack>
+
+        {error && (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" onClick={update}>
+                Retry
+              </Button>
+            }
+            className="orders-error"
+          >
+            {error}
+          </Alert>
+        )}
+        <DataGrid<Order>
+          rows={rows}
+          columns={gridColumns}
+          loading={loading && orders === null}
+          // TODO: implement server-side search and fitler
+          paginationMode="server"
+          paginationModel={{
+            page: offset / PAGE_SIZE,
+            pageSize: PAGE_SIZE,
+          }}
+          onPaginationModelChange={({ page }) => setOffset(page * PAGE_SIZE)}
+          rowCount={-1}
+          paginationMeta={{
+            hasNextPage: (orders?.length ?? 0) > PAGE_SIZE,
+          }}
+          pageSizeOptions={[PAGE_SIZE]}
+          disableRowSelectionOnClick
+          localeText={{
+            noRowsLabel: query ? 'No matching orders' : 'No orders found',
+          }}
+          className="orders-grid"
+        />
+      </Paper>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        className="search-note"
+      >
+        Search is limited to the curent page.
+      </Typography>
+    </Box>
   )
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      }).format(date)
+function DispatchButton({
+  order,
+  onDispatched,
+  onError,
+}: {
+  order: Order
+  onDispatched: () => void
+  onError: (message: string) => void
+}) {
+  const [dispatching, setDispatching] = useState(false)
+  const canDispatch =
+    order.status === 'received' || order.status === 'scheduled'
+
+  async function dispatch() {
+    setDispatching(true)
+    onError('')
+    try {
+      const response = await fetch(
+        `${API_URL}/orders/${order.id}/dispatch`,
+        { method: 'POST' },
+      )
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          detail?: string
+        }
+        throw new Error(body.detail || `Dispatch failed (${response.status}).`)
+      }
+      onDispatched()
+    } catch (cause) {
+      onError(
+        cause instanceof TypeError
+          ? `Could not reach ${API_URL}. Check that the backend is running.`
+          : cause instanceof Error
+            ? cause.message
+            : 'Unable to dispatch order.',
+      )
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  return (
+    <Button
+      size="small"
+      variant="outlined"
+      startIcon={
+        dispatching ? <CircularProgress size={14} /> : <Send size={14} />
+      }
+      disabled={!canDispatch || dispatching}
+      onClick={() => void dispatch()}
+      aria-label={`Dispatch order ${order.source_order_id}`}
+    >
+      {order.status === 'dispatched' ? 'Dispatched' : 'Dispatch'}
+    </Button>
+  )
 }
