@@ -72,7 +72,7 @@ docker compose -f backend/compose.yaml up --build --wait
 ```
 
 The API documentation is available at `http://localhost:9000/docs`.
-Stop both containers with `docker compose -f backend/compose.yaml down`. This keeps the database volume; add `--volumes` only if you also want to permanently delete its contents.
+Stop both containers with `docker compose -f backend/compose.yaml down`. This keeps the database volume.
 
 ### Background workers
 
@@ -83,9 +83,8 @@ The worker also dispatches scheduled orders when their scheduled time has arrive
 
 ### Upload a CSV
 
-The CSV uploader accepts the Homework survey columns and ignores additional columns.
-The required columns are `items`, `tomorrow`, and `meal`.
-Rows with `tomorrow=true` are scheduled 24 hours after upload; rows with `tomorrow=false` are received immediately.
+The required columns for CSV uploads are `items`, `tomorrow`, and `meal`.
+Rows with `tomorrow=true` are scheduled 24 hours after upload whereas rows with `tomorrow=false` are received immediately.
 With the backend running, execute the upload CLI from `backend/`:
 
 ```bash
