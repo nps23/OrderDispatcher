@@ -1,3 +1,5 @@
+## All prompts were for the GPT-6 Luna model.
+
 - Add a compose.yaml that can build the backend and database into a single image. Once you have this, update the README. Note: this is not a recommended dev flow since we lose  FastAPI hot reloading, but useful for quick demo purposes. Make sure to note that in the README. Note that the instructions should call out building the database via docker compose, but running the app via uv for hot reload capabilities.
 - Update pyproject.toml with all of the exiting deps in this directory right now: ordering_system/order_dispatcher/backend
 - In my ingest_mocks directory, I want:
