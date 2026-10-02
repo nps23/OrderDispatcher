@@ -34,6 +34,7 @@ def _enum_values(enum_class: type[enum.StrEnum]) -> list[str]:
 def _enum_column(
     enum_class: type[enum.StrEnum], name: str, **kwargs: Any
 ) -> sqlalchemy.Column:
+    """Generator for SQLalchemy enums form python enums"""
     return sqlalchemy.Column(
         sqlalchemy.Enum(
             enum_class,
@@ -130,6 +131,9 @@ class DispatchedOrder(sqlmodel.SQLModel, table=True):
     )
 
     order: "Order" = sqlmodel.Relationship(back_populates="dispatch")
+    # items: "OrderItem" = sqlmodel.Relationship(back_populates="itme")
+
+
 class OrderItem(sqlmodel.SQLModel, table=True):
     __tablename__ = "order_items"
 
@@ -150,6 +154,7 @@ class OrderItem(sqlmodel.SQLModel, table=True):
     order: "Order" = sqlmodel.Relationship(back_populates="items")
 
 
+# Event probably isn't the best name here, but leaving it for now.
 class OrderEvent(sqlmodel.SQLModel, table=True):
     __tablename__ = "order_events"
     __table_args__ = (

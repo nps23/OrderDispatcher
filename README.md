@@ -43,7 +43,8 @@ The API is at `http://localhost:9000/docs`; the database health check is at `htt
 
 The backend polls `data/api_responses.jsonl` immediately at startup and then every 30 seconds.
 It also dispatches scheduled orders when their `scheduled_for` timestamp arrives.
-CSV timestamps must use ISO 8601 with an explicit timezone, for example `2030-10-01T09:00:00-04:00`.
+CSV uploads require columns `items`, `tomorrow`, and `meal`, and ignore additional columns.
+Rows with `tomorrow=true` are scheduled 24 hours after the upload timestamp; rows with `tomorrow=false` are received immediately.
 
 To run the backend and database in Docker, from the repository root use:
 
@@ -55,11 +56,12 @@ The API is then available at `http://localhost:9000/docs`.
 
 ### Test the CSV ingest endpoints
 
-The test CLI sends sample data to a running backend.
-Upload one CSV through the same HTTP endpoint used by clients:
+The test CLI sends CSV to a running backend.
+The upload command accepts the original Homework CSVs and additional columns.
+Upload one of the original Homework CSV files through the same HTTP endpoint used by clients:
 
 ```bash
-uv run python -m scripts.pipeline_cli upload-csv ../data/orders_1.csv
+uv run python -m scripts.pipeline_cli upload-csv ../../Homework/orders_1.csv
 ```
 
 ### Simulating real webhook traffic

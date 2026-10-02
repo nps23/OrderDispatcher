@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 import pydantic
@@ -40,23 +41,8 @@ class PollingAPIResponse(sqlmodel.SQLModel):
 
 class CSVOrderPayload(sqlmodel.SQLModel):
     items: str
-    scheduled_for: datetime | None = None
-
-    @pydantic.field_validator("scheduled_for", mode="before")
-    @classmethod
-    def empty_schedule_is_none(cls, value: object) -> object:
-        return None if value == "" else value
-
-    @pydantic.field_validator("scheduled_for")
-    @classmethod
-    def schedule_must_include_timezone(
-        cls, value: datetime | None
-    ) -> datetime | None:
-        if value is not None and (
-            value.tzinfo is None or value.utcoffset() is None
-        ):
-            raise ValueError("scheduled_for must include a timezone")
-        return value
+    tomorrow: bool
+    meal: Literal["breakfast", "lunch", "dinner"]
 
 
 class OrderCreateRequest(sqlmodel.SQLModel):

@@ -16,4 +16,5 @@
 - Take a look at the layout I've created on for the /orders route. Please add some nicer styling on the components.
 - Your styling blew up the padding between the descriptor chips and the quantities. fix this
 - The source_id and order_id now get cut off in the datagrid as well per the styling changes. Please fix
+- Take a look at the items in the sample CSV files. Write a _parse_item_list function that can split these out whilst retaining the paranetheisis groupping
 
