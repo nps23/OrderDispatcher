@@ -1,72 +1,101 @@
 # Order Dispatcher
 
-A prototype for a basic order ingest and dispatch system.
+A prototype order ingestion and dispatch system that combines webhook, polling API, and CSV sources.
+Orders are normalized into the `Order` model and their changes are recorded as order events.
+`POST /orders/{order_id}/dispatch` marks an eligible order as dispatched in the database; there is no robot simulation yet.
+Scheduled orders cannot be dispatched before their scheduled time.
+A background worker checks for due scheduled orders every 30 seconds and records each dispatch and its audit event.
 
-All three inputs are normalized into the `Order` model.
-Robot dispatch is intentionally a small handoff for this prototype: `POST /orders/{order_id}/dispatch` dispatches an eligible order immediately.
-Scheduled orders cannot be dispatched before their timestamp.
-A backend worker also checks for due scheduled orders every 30 seconds, creates one record in `dispatched_orders`, changes each order status to `dispatched`, and records an audit event.
+## Architecture and UI
 
-## Backend
+![Order dispatcher architecture](./basic_architecutre_plan.png)
 
-The project runs a local Postgres database, intended to be run out of a Docker container.
-The backend can run directly to take advantage of FastAPI's hot reload capabilities, or separately in a Docker container.
-For local development, you need Docker Engine with the Docker Compose v2 plugin and [uv](https://docs.astral.sh/uv/).
+![Orders page](./orders.png)
 
-### Run the backend locally with hot reload
+![Order history page](./orders_event.png)
 
-From the repository root, start PostgreSQL and wait for its health check:
+## Prerequisites
+
+For local development, install Docker Engine with Docker Compose v2, [uv](https://docs.astral.sh/uv/), and Node.js with npm.
+
+## Database
+
+PostgreSQL runs in Docker using `backend/compose.yaml`.
+From the repository root, start the database and wait for its health check:
 
 ```bash
 docker compose -f backend/compose.yaml up -d --wait db
 ```
 
-Docker creates the local `order_dispatcher` database and user.
-When the API starts, it creates any missing tables from the SQLModel definitions.
-Then, from `backend/`, sync the Python dependencies and start the API with reload:
+Compose creates the local `order_dispatcher` database and user.
+The API creates missing tables from the SQLModel definitions when it starts.
+The database health check is available at `http://localhost:9000/health/database` once the API is running.
+
+Stop the database from the repository root with:
 
 ```bash
-uv sync --locked
-DATABASE_URL='postgresql+psycopg://order_dispatcher:order_dispatcher@localhost:5432/order_dispatcher' \
-  uv run uvicorn src.api.main:build_app --factory --reload --host 0.0.0.0 --port 9000
+docker compose -f backend/compose.yaml down
 ```
 
-`create_all` does not migrate or remove columns in an existing database.
-If you are using a disposable development database with the old schema, back up anything you need, then recreate the database volume before starting the new backend:
+To completely reset the local database, remove the Docker volume and start the database again:
 
 ```bash
 docker compose -f backend/compose.yaml down --volumes
 docker compose -f backend/compose.yaml up -d --wait db
 ```
 
-The API is at `http://localhost:9000/docs`; the database health check is at `http://localhost:9000/health/database`.
+Removing the volume permanently deletes the local database contents.
+`create_all` creates missing tables but does not migrate or remove columns in an existing database.
 
-The backend reads up to five responses from `data/api_responses.jsonl` immediately at startup and then advances by up to five more responses every 30 seconds until the fixture is exhausted.
-It also dispatches scheduled orders when their `scheduled_for` timestamp arrives.
-CSV uploads require columns `items`, `tomorrow`, and `meal`, and ignore additional columns.
-Rows with `tomorrow=true` are scheduled 24 hours after the upload timestamp; rows with `tomorrow=false` are received immediately.
+## Backend
 
-To run the backend and database in Docker, from the repository root use:
+### Run locally with hot reload
+
+Start PostgreSQL using the [database instructions](#database).
+From the repository root, sync backend dependencies and start the API with hot reload:
+
+```bash
+cd backend
+uv sync --locked
+DATABASE_URL='postgresql+psycopg://order_dispatcher:order_dispatcher@localhost:5432/order_dispatcher' \
+  uv run uvicorn src.api.main:build_app --factory --reload --host 0.0.0.0 --port 9000
+```
+
+The API documentation is available at `http://localhost:9000/docs`.
+
+### Run the backend and database in Docker
+
+From the repository root, build and start the backend and PostgreSQL together:
 
 ```bash
 docker compose -f backend/compose.yaml up --build --wait
 ```
 
-The API is then available at `http://localhost:9000/docs`.
+The API documentation is available at `http://localhost:9000/docs`.
+Stop both containers with `docker compose -f backend/compose.yaml down`.
 
-### Test the CSV ingest endpoints
+### Background workers
 
-The test CLI sends CSV to a running backend.
-The upload command accepts the original Homework CSVs and additional columns.
-Upload one of the original Homework CSV files through the same HTTP endpoint used by clients:
+The polling worker reads up to five responses from `data/api_responses.jsonl` at startup and advances through the fixture in batches of five every 30 seconds.
+The worker also dispatches scheduled orders when their scheduled time has arrived.
+
+## Ingestion examples
+
+### Upload a CSV
+
+The CSV uploader accepts the Homework survey columns and ignores additional columns.
+The required columns are `items`, `tomorrow`, and `meal`.
+Rows with `tomorrow=true` are scheduled 24 hours after upload; rows with `tomorrow=false` are received immediately.
+With the backend running, execute the upload CLI from `backend/`:
 
 ```bash
-uv run python -m scripts.pipeline_cli upload-csv ../../Homework/orders_1.csv
+uv run python -m scripts.pipeline_cli upload-csv <path_to_csv>
 ```
 
-### Simulating real webhook traffic
+### Simulate webhook traffic
 
-To continuously simulate bursty webhook-like order traffic, run:
+The webhook simulator posts bursts of sample orders to `POST /ingest/webhook` until interrupted.
+Run it from `backend/` while the API is running:
 
 ```bash
 uv run python -m scripts.pipeline_cli simulate-bursts \
@@ -74,48 +103,54 @@ uv run python -m scripts.pipeline_cli simulate-bursts \
   --sleep-seconds 2
 ```
 
-The simulator posts each burst to `POST /ingest/webhook`, sleeps between bursts, and continues until interrupted.
-Set `--sample` to use another webhook JSONL fixture.
-The CLI targets the local backend at `http://localhost:9000`.
+Use `--sample <path_to_jsonl>` to choose a different webhook fixture.
 
-### Background polling
-The backend advances through `data/api_responses.jsonl` in batches of five responses every 30 seconds.
-Set `POLLING_API_FILE` to use another JSONL fixture.
-There is no public polling endpoint.
+## Frontend
 
-Once the backend is running, API documentation can be found at the `/docs` endpoint.
-
-Stop PostgreSQL from the repository root with `docker compose -f backend/compose.yaml down`.
-To start over with a fresh database, add `--volumes` to that command, which will wipe the database.
-
-Docker Compose v2 is required.
-Check whether it is installed with:
+The React frontend is in `ui/` and uses Vite for scaffolding.
+Start the backend first so the UI can load orders from `http://localhost:9000`.
+From the repository root, install frontend dependencies and start the development server:
 
 ```bash
-docker compose version
+cd ui
+npm ci
+npm run dev
 ```
 
-On Linux, you can install the plugin via:
+Open the local URL printed by Vite, usually `http://localhost:5173/orders`.
+Order history pages are available at `/orders/{order_id}`.
+To check the production build and lint, run these commands from `ui/`:
 
 ```bash
-sudo apt update
-sudo apt install docker-compose-v2
+npm run build
+npm run lint
 ```
 
-## Follow up work (roughtly in priority order)
+## Follow-up work
 
-Tests: Start with backend service and API tests, then UI component tests, then a small number of Playwright or similar flows for list/filter, order history, dispatch, and failure states.
+### Tests
 
-Robot model: Define the states and allowed transitions before adding endpoints.
-In particular, distinguish queued for dispatch from accepted by the robot / being assembled.
-For now, we keep the MVP worker in-process or as a separate local process.
-But we may explore microservicing one the concurrency and reliability needs of the robot are unknown.
-Make robot callbacks idempotent and associate them with a dispatch ID.
+Add backend service and API tests, UI component tests, and Playwright flows for listing, filtering, order history, dispatch, and failure cases.
 
-Logging and metrics: Structured logs and trace/correlation IDs.
-Probably can start with something like `structlog` for the backend.
+### Security and RBAC controls
+- When DB is deployed, we need sectuiry and an Vault-like for for the API to authenticate.
+- Should introduce RBA controls to ensure not anyone can dispatch to the robot.
 
-Frontend API wrappers: Add a typed API module before the UI grows further.
-It can centralize URLs, response/error handling, and order/event types.
+### Robot lifecycle
 
-UI organization: Extract the orders list and dispatch actions.
+Define order and robot state transitions before adding robot endpoints.
+Add a dispatch queue and distinguish queued orders from orders accepted by the robot or being assembled.
+Consider moving workers into separate services when deployment needs require it.
+
+### Logging and metrics
+
+Add structured logs and trace or correlation IDs, potentially using `structlog`.
+Instrument production metrics with the chosen monitoring platform.
+
+### Frontend API client
+
+Add a typed API module to centralize request URLs, response and error handling, and shared order types.
+
+### UI organization
+
+Extract the orders list and dispatch actions into focused components.
