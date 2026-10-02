@@ -3,7 +3,7 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import fastapi
 import pydantic
@@ -43,23 +43,25 @@ def _add_order_event(
     )
 
 
-def _split_csv_items(value: str) -> list[str]:
+# TODO: This is highly specific to the sample CSVs provided. Need to standardize some format here
+def _parse_item_list(value: str) -> list[str]:
+    """Split comma/newline-separated items without splitting parenthetical options."""
     items = []
-    current = []
+    start = 0
     parenthesis_depth = 0
-    for character in value:
+
+    for index, character in enumerate(value):
         if character == "(":
             parenthesis_depth += 1
         elif character == ")" and parenthesis_depth:
             parenthesis_depth -= 1
-        if character in ",\r\n" and parenthesis_depth == 0:
-            item = "".join(current).strip()
+        elif character in ",\r\n" and parenthesis_depth == 0:
+            item = value[start:index].strip()
             if item:
                 items.append(item)
-            current = []
-        else:
-            current.append(character)
-    item = "".join(current).strip()
+            start = index + 1
+
+    item = value[start:].strip()
     if item:
         items.append(item)
     return items
@@ -70,6 +72,11 @@ def ingest_webhook_order(
     session: sqlalchemy.orm.Session,
     payload: api_models.WebhookEvent,
 ) -> storage_models.Order:
+    
+    
+    
+    print("Dispatching orders...")
+    
     source = storage_models.IngestionSource.WEBHOOK
     source_order_id = str(payload.order_id)
 
@@ -127,6 +134,10 @@ def create_order(
     session: sqlalchemy.orm.Session,
     payload: api_models.OrderCreateRequest,
 ) -> storage_models.Order:
+    
+    
+    print("Creating orders...")
+    
     source = storage_models.IngestionSource.WEBHOOK
     order = storage_models.Order(
         source_order_id=payload.source_order_id,
@@ -169,6 +180,9 @@ def dispatch_order(
     *,
     now: datetime | None = None,
 ) -> storage_models.DispatchedOrder:
+
+    print("Dispatching orders...")
+    
     current_time = now or datetime.now(timezone.utc)
     if current_time.tzinfo is None or current_time.utcoffset() is None:
         raise ValueError("now must include a timezone")
@@ -224,6 +238,10 @@ def dispatch_due_scheduled_orders(
     *,
     now: datetime | None = None,
 ) -> list[storage_models.DispatchedOrder]:
+
+
+    print("Dispatching schedules orders...")
+    
     current_time = now or datetime.now(timezone.utc)
     if current_time.tzinfo is None or current_time.utcoffset() is None:
         raise ValueError("now must include a timezone")
@@ -244,11 +262,12 @@ def dispatch_due_scheduled_orders(
     ]
 
 
-# TODO: Move outside of this module. This is real
 def ingest_polling_response(
     session: sqlalchemy.orm.Session,
     payload: api_models.PollingAPIResponse,
 ) -> api_models.IngestionBatchResponse:
+
+    print("Ingesting polling orders...\n")
     source = storage_models.IngestionSource.POLLING_API
     if payload.response != 200:
         raise fastapi.HTTPException(
@@ -266,6 +285,7 @@ def ingest_polling_response(
         processed_orders = []
         for source_order_number, source_items in grouped_items.items():
             source_order_id = str(source_order_number)
+            # TODO: Implement bulk order fetch
             order = _find_order(session, source_order_id)
             if order is None:
                 order = storage_models.Order(
@@ -303,6 +323,7 @@ def ingest_polling_response(
             cancelled = any(
                 item.status.lower() == "cancelled" for item in source_items
             )
+            print(f"Cancelled items is: {cancelled}")
             if cancelled and order.status != storage_models.OrderStatus.CANCELLED:
                 order.status = storage_models.OrderStatus.CANCELLED
                 _add_order_event(
@@ -326,21 +347,35 @@ def ingest_polling_response(
 def ingest_csv_file(
     session: sqlalchemy.orm.Session,
     content: bytes,
+    *,
+    now: datetime | None = None,
 ) -> api_models.IngestionBatchResponse:
+    # TODO: simplifying for now by falling back UTC times, but there are certainly edge cases
+    # to be figured out
+    ingestion_time = now or datetime.now(timezone.utc)
+    if ingestion_time.tzinfo is None or ingestion_time.utcoffset() is None:
+        raise ValueError("now must include a timezone")
+
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_400_BAD_REQUEST,
-            detail="CSV file must be UTF-8 encoded",
+            detail="Failed to decode input CSV",
         ) from exc
 
     reader = csv.DictReader(io.StringIO(text))
-    required_headers = {"items", "scheduled_for"}
-    if reader.fieldnames is None or not required_headers.issubset(reader.fieldnames):
+    required_columns = {"items", "tomorrow", "meal"}
+    if reader.fieldnames is None:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"CSV must include columns: {', '.join(sorted(required_headers))}",
+            detail="CSV file is empty",
+        )
+    missing_columns = required_columns.difference(reader.fieldnames)
+    if missing_columns:
+        raise fastapi.HTTPException(
+            status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"CSV must include columns: {', '.join(sorted(missing_columns))}",
         )
 
     validated_rows = []
@@ -351,14 +386,23 @@ def ingest_csv_file(
                     status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"CSV row {row_number} has an unexpected number of columns",
                 )
-            csv_payload = api_models.CSVOrderPayload.model_validate(row)
-            items = _split_csv_items(csv_payload.items)
+            csv_payload = api_models.CSVOrderPayload.model_validate(
+                {column: row[column] for column in required_columns}
+            )
+            items = _parse_item_list(csv_payload.items)
             if not items:
                 raise fastapi.HTTPException(
                     status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"CSV row {row_number} must contain at least one item",
                 )
-            validated_rows.append((row_number, csv_payload, items))
+            validated_rows.append(
+                (
+                    row_number,
+                    csv_payload.tomorrow,
+                    csv_payload.meal,
+                    items,
+                )
+            )
     except pydantic.ValidationError as exc:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -368,26 +412,33 @@ def ingest_csv_file(
     if not validated_rows:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="CSV file contains no order rows",
+            detail="CSV file contains no valid order rows",
         )
 
     batch_id = hashlib.sha256(content).hexdigest()
     source = storage_models.IngestionSource.CSV
     order_ids = []
     try:
-        for row_number, csv_payload, items in validated_rows:
+        for row_number, tomorrow, meal, items in validated_rows:
             source_order_id = f"{batch_id}:{row_number}"
             if _find_order(session, source_order_id) is not None:
                 continue
 
+            scheduled_for = (
+                # TODO: figure out a better strat here than just 1 day bck
+                # What about timezones?
+                ingestion_time + timedelta(days=1)
+                if tomorrow
+                else None
+            )
             order = storage_models.Order(
                 source_order_id=source_order_id,
                 status=(
                     storage_models.OrderStatus.SCHEDULED
-                    if csv_payload.scheduled_for is not None
+                    if scheduled_for is not None
                     else storage_models.OrderStatus.RECEIVED
                 ),
-                scheduled_for=csv_payload.scheduled_for,
+                scheduled_for=scheduled_for,
                 items=[
                     storage_models.OrderItem(name=name) for name in items
                 ],
@@ -401,10 +452,11 @@ def ingest_csv_file(
                 {
                     "status": order.status.value,
                     "scheduled_for": (
-                        order.scheduled_for.isoformat()
-                        if order.scheduled_for is not None
+                        scheduled_for.isoformat()
+                        if scheduled_for is not None
                         else None
                     ),
+                    "meal": meal,
                 },
             )
             order_ids.append(order.id)
