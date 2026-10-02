@@ -167,6 +167,59 @@ body {
   line-height: 1.25;
 }
 
+.order-identifiers a {
+  color: inherit;
+  font-weight: 700;
+}
+
+.history-main {
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.back-link {
+  align-self: flex-start;
+}
+
+.history-heading,
+.history-event-heading {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-summary,
+.history-event {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.history-title {
+  margin-top: 8px;
+}
+
+.history-events {
+  gap: 12px;
+}
+
+.history-loading {
+  align-self: center;
+  margin: auto;
+}
+
+.event-details {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  color: #9ba99e;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
 .order-items {
   display: flex;
   flex-direction: column;

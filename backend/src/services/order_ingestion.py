@@ -152,6 +152,7 @@ def create_order(
         session.commit()
     except sqlalchemy.exc.IntegrityError as exc:
         session.rollback()
+        # TODO: decide if this should be allowd, maybe with RBAC'd overrides.
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_409_CONFLICT,
             detail="An order with this source_order_id already exists",
