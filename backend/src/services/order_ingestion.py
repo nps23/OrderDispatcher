@@ -246,6 +246,7 @@ def dispatch_due_scheduled_orders(
     if current_time.tzinfo is None or current_time.utcoffset() is None:
         raise ValueError("now must include a timezone")
 
+    # TODO: right now this onyl dispatches orders tht are uploaded via CSV. Figure out a better way to test this
     statement = (
         sqlalchemy.select(storage_models.Order.id)
         .where(
