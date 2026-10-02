@@ -1,14 +1,15 @@
 # Order Dispatcher
 
-A prototype order ingestion and dispatch system that combines webhook, polling API, and CSV sources.
-Orders are normalized into the `Order` model and their changes are recorded as order events.
-`POST /orders/{order_id}/dispatch` marks an eligible order as dispatched in the database; there is no robot simulation yet.
+A prototype order ingestion and dispatch system for a robot that combines webhook, polling API, and CSV sources.
+Orders from the different pipelines are normalized into the `Order` model and their changes are recorded as order events.
+`POST /orders/{order_id}/dispatch` marks an eligible order as dispatched in the database.
+Once an order is dispatched, we can presume it went to the robot for preperation.
 Scheduled orders cannot be dispatched before their scheduled time.
 A background worker checks for due scheduled orders every 30 seconds and records each dispatch and its audit event.
 
 ## Architecture and UI
 
-![Order dispatcher architecture](./basic_architecutre_plan.png)
+![Order dispatcher architecture](./inital_arch.drawio.png)
 
 ![Orders page](./orders.png)
 
