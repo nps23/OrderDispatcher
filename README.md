@@ -19,6 +19,8 @@ A background worker checks for due scheduled orders every 30 seconds and records
 
 For local development, install Docker with [Docker Compose v2](https://docs.docker.com/compose/install/), [uv](https://docs.astral.sh/uv/getting-started/installation/), and [Node.js with npm](https://nodejs.org/en/download/). Docker Desktop includes Compose. If you install Docker Engine directly on Linux, follow the [Compose plugin installation instructions](https://docs.docker.com/compose/install/linux/).
 
+This was developed and tested on Ubuntu 24.04.4 LTS.
+
 ## Database
 
 PostgreSQL runs in Docker using `backend/compose.yaml`. From the repository root, start the database and wait for its health check:
