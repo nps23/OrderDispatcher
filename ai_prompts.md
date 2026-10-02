@@ -10,3 +10,10 @@
 - Take a look at the polling implementation and dispatch worker I added on the background worker. Please update the README briefly to describe the functionality. It:
     - "Polls" by checking the  api_responses.jsonl in /data every 30 seconds.
     - Dispatches orders that are scheduled to the robot, using the UTC timestamps. 
+- Give the the commands to bootstrap a react app with vite, and then to install material UI
+- Take a look at my App.tsx page, where I have a the /orders page working. I want you to create a reasonable dark theme pallete instead of the plain theme I have now.
+- Give me the command to install material UI data grid.
+- Take a look at the layout I've created on for the /orders route. Please add some nicer styling on the components.
+- Your styling blew up the padding between the descriptor chips and the quantities. fix this
+- The source_id and order_id now get cut off in the datagrid as well per the styling changes. Please fix
+
