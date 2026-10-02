@@ -267,7 +267,7 @@ def ingest_polling_response(
     payload: api_models.PollingAPIResponse,
 ) -> api_models.IngestionBatchResponse:
 
-    print("Ingesting polling orders...\n")
+    # print("Ingesting polling orders...\n")
     source = storage_models.IngestionSource.POLLING_API
     if payload.response != 200:
         raise fastapi.HTTPException(
@@ -323,7 +323,7 @@ def ingest_polling_response(
             cancelled = any(
                 item.status.lower() == "cancelled" for item in source_items
             )
-            print(f"Cancelled items is: {cancelled}")
+            # print(f"Cancelled items is: {cancelled}")
             if cancelled and order.status != storage_models.OrderStatus.CANCELLED:
                 order.status = storage_models.OrderStatus.CANCELLED
                 _add_order_event(
