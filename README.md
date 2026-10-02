@@ -17,28 +17,25 @@ A background worker checks for due scheduled orders every 30 seconds and records
 
 ## Prerequisites
 
-For local development, install Docker Engine with Docker Compose v2, [uv](https://docs.astral.sh/uv/), and Node.js with npm.
+For local development, install Docker with [Docker Compose v2](https://docs.docker.com/compose/install/), [uv](https://docs.astral.sh/uv/getting-started/installation/), and [Node.js with npm](https://nodejs.org/en/download/). Docker Desktop includes Compose. If you install Docker Engine directly on Linux, follow the [Compose plugin installation instructions](https://docs.docker.com/compose/install/linux/).
 
 ## Database
 
-PostgreSQL runs in Docker using `backend/compose.yaml`.
-From the repository root, start the database and wait for its health check:
+PostgreSQL runs in Docker using `backend/compose.yaml`. From the repository root, start the database and wait for its health check:
 
 ```bash
 docker compose -f backend/compose.yaml up -d --wait db
 ```
 
-Compose creates the local `order_dispatcher` database and user.
-The API creates missing tables from the SQLModel definitions when it starts.
-The database health check is available at `http://localhost:9000/health/database` once the API is running.
+Compose creates the local `order_dispatcher` database and user and stores data in a named Docker volume. The API creates missing tables from the SQLModel definitions when it starts. The database health check is available at `http://localhost:9000/health/database` once the API is running.
 
-Stop the database from the repository root with:
+Stop the database while keeping its data with:
 
 ```bash
 docker compose -f backend/compose.yaml down
 ```
 
-To completely reset the local database, remove the Docker volume and start the database again:
+To completely reset the local database, remove its Docker volume and start it again:
 
 ```bash
 docker compose -f backend/compose.yaml down --volumes
@@ -73,7 +70,7 @@ docker compose -f backend/compose.yaml up --build --wait
 ```
 
 The API documentation is available at `http://localhost:9000/docs`.
-Stop both containers with `docker compose -f backend/compose.yaml down`.
+Stop both containers with `docker compose -f backend/compose.yaml down`. This keeps the database volume; add `--volumes` only if you also want to permanently delete its contents.
 
 ### Background workers
 
