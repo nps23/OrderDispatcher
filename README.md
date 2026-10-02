@@ -41,7 +41,7 @@ docker compose -f backend/compose.yaml up -d --wait db
 
 The API is at `http://localhost:9000/docs`; the database health check is at `http://localhost:9000/health/database`.
 
-The backend polls `data/api_responses.jsonl` immediately at startup and then every 30 seconds.
+The backend reads up to five responses from `data/api_responses.jsonl` immediately at startup and then advances by up to five more responses every 30 seconds until the fixture is exhausted.
 It also dispatches scheduled orders when their `scheduled_for` timestamp arrives.
 CSV uploads require columns `items`, `tomorrow`, and `meal`, and ignore additional columns.
 Rows with `tomorrow=true` are scheduled 24 hours after the upload timestamp; rows with `tomorrow=false` are received immediately.
@@ -79,7 +79,7 @@ Set `--sample` to use another webhook JSONL fixture.
 The CLI targets the local backend at `http://localhost:9000`.
 
 ### Background polling
-The backend reads `data/api_responses.jsonl` at startup and polls the fixture again every 30 seconds.
+The backend advances through `data/api_responses.jsonl` in batches of five responses every 30 seconds.
 Set `POLLING_API_FILE` to use another JSONL fixture.
 There is no public polling endpoint.
 

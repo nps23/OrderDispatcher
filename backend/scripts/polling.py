@@ -4,6 +4,24 @@ from pathlib import Path
 from src.api import models
 
 
+class PollingFixture:
+    def __init__(self, sample_path: Path, batch_size: int = 5) -> None:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        self.sample_path = sample_path
+        self.batch_size = batch_size
+        self._offset = 0
+
+    def poll(self) -> list[models.PollingAPIResponse]:
+        responses = get_polling_segment(
+            self.sample_path,
+            offset=self._offset,
+            limit=self.batch_size,
+        )
+        self._offset += len(responses)
+        return responses
+
+
 def get_polling_segment(
     sample_path: Path,
     offset: int = 0,

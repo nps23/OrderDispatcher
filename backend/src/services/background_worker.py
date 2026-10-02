@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from scripts.polling import PollingFixture
 from src.services import order_ingestion
 from src.services import polling_source
 from src.storage import database
@@ -10,9 +11,9 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 30
 
 
-def _poll_source() -> None:
+def _poll_source(poller: PollingFixture) -> None:
     with database.new_session() as session:
-        polling_source.poll_orders(session)
+        polling_source.poll_orders(session, poller)
 
 
 def _dispatch_due_orders() -> None:
@@ -30,10 +31,11 @@ async def run_background_worker() -> None:
 
 
     """
-    
+    poller = polling_source.create_poller()
+
     while True:
         try:
-            await asyncio.to_thread(_poll_source)
+            await asyncio.to_thread(_poll_source, poller)
         except Exception:
             logger.exception("Background polling cycle failed")
 
